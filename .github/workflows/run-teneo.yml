@@ -3,7 +3,7 @@ name: Run Teneo Farm 24/7
 on:
   schedule:
     - cron: "0 */6 * * *"   # Runs every 6 hours
-  workflow_dispatch:        # Allows manual trigger
+  workflow_dispatch:        # Allows manual trigger from the Actions tab
 
 jobs:
   run-teneo:
@@ -13,17 +13,17 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          python-version: "3.10"
+          node-version: "18"
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          npm install
 
       - name: Run script with token
         env:
           TENEO_TOKEN: ${{ secrets.TENEO_TOKEN }}
         run: |
-          printf "3\n$TENEO_TOKEN\n" | python3 main.py
+          printf "3\n$TENEO_TOKEN\n" | node main.js
