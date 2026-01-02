@@ -1,9 +1,9 @@
 name: Run Teneo Farm 24/7
 
 on:
+  workflow_dispatch:        # Manual trigger
   schedule:
     - cron: "0 */6 * * *"   # Runs every 6 hours
-  workflow_dispatch:        # Allows manual trigger from the Actions tab
 
 jobs:
   run-teneo:
@@ -26,4 +26,4 @@ jobs:
         env:
           TENEO_TOKEN: ${{ secrets.TENEO_TOKEN }}
         run: |
-          printf "3\n$TENEO_TOKEN\n" | node main.js
+          printf "n\n3\n$TENEO_TOKEN\n" | node main.js
