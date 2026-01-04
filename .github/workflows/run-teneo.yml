@@ -1,6 +1,6 @@
 name: Run Teneo Farm 24/7
 
-on:
+n:
   workflow_dispatch:        # Manual trigger
   schedule:
     - cron: "0 */6 * * *"   # Runs every 6 hours
