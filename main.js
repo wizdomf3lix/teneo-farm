@@ -1,4 +1,4 @@
-// main.js - Optimized version
+// main.js - Full optimized script (ready to paste)
 const WebSocket = require('ws');
 const { promisify } = require('util');
 const fs = require('fs');
@@ -23,7 +23,7 @@ const LOCAL_FILE = 'localStorage.json';
 const readFileAsync = promisify(fs.readFile);
 const writeFileAsync = promisify(fs.writeFile);
 
-const auth = "";
+const auth = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlra25uZ3JneHV4Z2pocGxicGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjU0MzgxNTAsImV4cCI6MjA0MTAxNDE1MH0.DRAvf8nH1ojnJBc3rD_Nw6t1AV8X_g6gmY_HByG2Mag";
 const reffCode = "OwAG3kib1ivOJG4Y0OCZ8lJETa6ypvsDtGmdhcjB";
 
 const WS_BASE = "wss://secure.ws.teneo.pro";
@@ -44,8 +44,17 @@ let state = {
   potentialPoints: 0,
   countdown: "Calculating...",
   lastUpdated: null,
-  autoClaim: false, // set true in localStorage to enable auto-claim
+  autoClaim: false,
 };
+
+/* -------------------------
+   Logging helper
+   ------------------------- */
+function log(...args) {
+  const msg = `[${new Date().toISOString()}] ${args.join(' ')}`;
+  console.log(msg);
+  try { fs.appendFileSync('run.log', msg + '\n'); } catch (e) {}
+}
 
 /* -------------------------
    Utility: safe localStorage
@@ -56,19 +65,17 @@ async function getLocalStorage() {
     const parsed = JSON.parse(raw || '{}');
     return parsed;
   } catch (err) {
-    // If file missing or corrupted, return defaults
     return {};
   }
 }
 
 async function setLocalStorage(partial) {
-  // Merge with existing file to avoid overwriting unrelated keys
   const current = await getLocalStorage();
   const merged = { ...current, ...partial };
   try {
     await writeFileAsync(LOCAL_FILE, JSON.stringify(merged, null, 2), 'utf8');
   } catch (err) {
-    console.error('Failed to write localStorage:', err.message);
+    log('Failed to write localStorage:', err.message || err);
   }
 }
 
@@ -92,11 +99,10 @@ function buildWsUrl(token) {
 
 async function connectWebSocket(token, proxy) {
   if (!token) {
-    console.warn('No token provided to connectWebSocket.');
+    log('No token provided to connectWebSocket.');
     return;
   }
   if (socket) {
-    // already connected or connecting
     if (socket.readyState === WebSocket.OPEN) return;
     try { socket.terminate(); } catch (e) {}
     socket = null;
@@ -109,16 +115,16 @@ async function connectWebSocket(token, proxy) {
   try {
     socket = new WebSocket(wsUrl, options);
   } catch (err) {
-    console.error('WebSocket creation failed:', err.message);
+    log('WebSocket creation failed:', err.message || err);
     scheduleReconnect(token, proxy);
     return;
   }
 
   socket.on('open', async () => {
     reconnectAttempts = 0;
-    console.log('WebSocket connected at', new Date().toISOString());
-    await setLocalStorage({ lastUpdated: new Date().toISOString() });
+    log('WebSocket connected at', new Date().toISOString());
     state.lastUpdated = new Date().toISOString();
+    await setLocalStorage({ lastUpdated: state.lastUpdated });
     startPinging();
     startCountdownAndPoints();
   });
@@ -126,39 +132,36 @@ async function connectWebSocket(token, proxy) {
   socket.on('message', async (raw) => {
     try {
       const data = JSON.parse(raw);
-      console.log('Received message from WebSocket:', data);
+      log('Received message from WebSocket:', JSON.stringify(data));
       if (data.pointsTotal !== undefined) state.pointsTotal = data.pointsTotal;
       if (data.pointsToday !== undefined) state.pointsToday = data.pointsToday;
-
-      // persist only when relevant
       await setLocalStorage({
         pointsTotal: state.pointsTotal,
         pointsToday: state.pointsToday,
         lastUpdated: state.lastUpdated || new Date().toISOString()
       });
     } catch (err) {
-      console.warn('Failed to parse WS message:', err.message);
+      log('Failed to parse WS message:', err.message || err);
     }
   });
 
   socket.on('close', (code, reason) => {
-    console.log('WebSocket disconnected', code, reason ? reason.toString() : '');
+    log('WebSocket disconnected', code, reason ? reason.toString() : '');
     stopPinging();
     socket = null;
     scheduleReconnect(token, proxy);
   });
 
   socket.on('error', (err) => {
-    console.error('WebSocket error:', err.message || err);
-    // let close handler handle reconnect
+    log('WebSocket error:', err.message || err);
   });
 }
 
 function scheduleReconnect(token, proxy) {
-  if (reconnectTimer) return; // already scheduled
+  if (reconnectTimer) return;
   reconnectAttempts = Math.min(reconnectAttempts + 1, 10);
   const delay = Math.min(1000 * 2 ** (reconnectAttempts - 1), 30000);
-  console.log(`Reconnecting in ${Math.round(delay / 1000)}s... (attempt ${reconnectAttempts})`);
+  log(`Reconnecting in ${Math.round(delay / 1000)}s... (attempt ${reconnectAttempts})`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connectWebSocket(token, proxy);
@@ -188,10 +191,10 @@ function startPinging() {
         socket.send(JSON.stringify({ type: 'PING' }));
         await setLocalStorage({ lastPingDate: new Date().toISOString() });
       } catch (err) {
-        console.warn('Ping failed:', err.message);
+        log('Ping failed:', err.message || err);
       }
     }
-  }, 10000); // keep 10s as original
+  }, 10000);
 }
 
 function stopPinging() {
@@ -217,7 +220,7 @@ async function updateCountdownAndPoints() {
     state.countdown = 'Calculating...';
     state.potentialPoints = 0;
     await setLocalStorage({ potentialPoints: state.potentialPoints, countdown: state.countdown });
-    console.log(`Total Points: ${state.pointsTotal} | Today Points: ${state.pointsToday} | Countdown: ${state.countdown}`);
+    log(`Total Points: ${state.pointsTotal} | Today Points: ${state.pointsToday} | Countdown: ${state.countdown}`);
     return;
   }
 
@@ -236,7 +239,6 @@ async function updateCountdownAndPoints() {
     let newPoints = Math.min(maxPoints, (elapsedMinutes / 15) * maxPoints);
     newPoints = parseFloat(newPoints.toFixed(2));
 
-    // small randomized bonus occasionally (kept from original)
     if (Math.random() < 0.1) {
       const bonus = Math.random() * 2;
       newPoints = Math.min(maxPoints, newPoints + bonus);
@@ -249,18 +251,15 @@ async function updateCountdownAndPoints() {
     state.potentialPoints = 25;
   }
 
-  // persist less frequently: only when values changed
   await setLocalStorage({ potentialPoints: state.potentialPoints, countdown: state.countdown });
+  log(`Total Points: ${state.pointsTotal} | Today Points: ${state.pointsToday} | Countdown: ${state.countdown}`);
 
-  console.log(`Total Points: ${state.pointsTotal} | Today Points: ${state.pointsToday} | Countdown: ${state.countdown}`);
-
-  // Optional: auto-claim when ready (disabled by default)
   const storeAuto = (await getLocalStorage()).autoClaim;
   if (storeAuto && state.potentialPoints >= 25) {
     try {
-      await attemptClaim(store.accessToken || (await getLocalStorage()).accessToken);
+      await attemptClaim(state.accessToken || (await getLocalStorage()).accessToken);
     } catch (err) {
-      console.warn('Auto-claim failed:', err.message || err);
+      log('Auto-claim failed:', err.message || err);
     }
   }
 }
@@ -270,22 +269,19 @@ async function updateCountdownAndPoints() {
    ------------------------- */
 async function attemptClaim(token) {
   if (!token) return;
-  // NOTE: endpoint is hypothetical. If you have a real claim endpoint, replace below.
-  const claimUrl = 'https://node-b.teneo.pro/api/claim'; // placeholder - change if needed
+  const claimUrl = 'https://node-b.teneo.pro/api/claim'; // placeholder - replace if you have real endpoint
   try {
     const res = await axios.post(claimUrl, {}, {
       headers: { Authorization: `Bearer ${token}`, 'x-api-key': reffCode }
     });
-    console.log('Claim response:', res.data);
-    // update local points if response contains them
+    log('Claim response:', JSON.stringify(res.data));
     if (res.data && res.data.pointsTotal !== undefined) {
       state.pointsTotal = res.data.pointsTotal;
       state.pointsToday = res.data.pointsToday || state.pointsToday;
       await setLocalStorage({ pointsTotal: state.pointsTotal, pointsToday: state.pointsToday });
     }
   } catch (err) {
-    // don't throw to avoid crashing auto-claim
-    console.warn('Claim request error:', err.response ? err.response.data : err.message);
+    log('Claim request error:', err.response ? JSON.stringify(err.response.data) : err.message || err);
   }
 }
 
@@ -307,7 +303,7 @@ async function getUserId(proxy) {
     await startCountdownAndPoints();
     await connectWebSocket(access_token, proxy);
   } catch (error) {
-    console.error('Login Error:', error.response ? error.response.data : error.message);
+    log('Login Error:', error.response ? JSON.stringify(error.response.data) : error.message || error);
   }
 }
 
@@ -321,7 +317,7 @@ async function registerUser() {
 
     const isExist = await axios.post(isExistUrl, { email }, { headers: { 'x-api-key': reffCode } });
     if (isExist && isExist.data && isExist.data.exists) {
-      console.log('User already exists, please just login with:', email);
+      log('User already exists, please just login with:', email);
       return;
     }
 
@@ -337,9 +333,9 @@ async function registerUser() {
       }
     });
 
-    console.log('Registration successful. Please confirm your email at:', email);
+    log('Registration successful. Please confirm your email at:', email);
   } catch (error) {
-    console.error('Error during registration:', error.response ? error.response.data : error.message);
+    log('Error during registration:', error.response ? JSON.stringify(error.response.data) : error.message || error);
   }
 }
 
@@ -347,7 +343,6 @@ async function registerUser() {
    Main CLI flow
    ------------------------- */
 async function main() {
-  // load persisted state
   const local = await getLocalStorage();
   state = { ...state, ...local };
   if (local.accessToken) state.accessToken = local.accessToken;
@@ -360,52 +355,57 @@ async function main() {
     }
 
     if (!state.accessToken) {
-      const option = (await questionAsync('User Token not found. Would you like to:\n1. Register an account\n2. Login to your account\n3. Enter Token manually\nChoose an option: ')).trim();
-      switch (option) {
-        case '1':
+      while (true) {
+        const option = (await questionAsync(
+          'User Token not found. Would you like to:\n1. Register an account\n2. Login to your account\n3. Enter Token manually\nChoose an option: '
+        )).trim();
+
+        if (option === '1') {
           await registerUser();
           break;
-        case '2':
+        } else if (option === '2') {
           await getUserId(proxy);
           break;
-        case '3': {
+        } else if (option === '3') {
           const token = (await questionAsync('Please enter your access token: ')).trim();
-          state.accessToken = token;
-          await setLocalStorage({ accessToken: token });
-          await startCountdownAndPoints();
-          await connectWebSocket(token, proxy);
-          break;
+          if (token) {
+            state.accessToken = token;
+            await setLocalStorage({ accessToken: token });
+            await startCountdownAndPoints();
+            await connectWebSocket(token, proxy);
+            break;
+          } else {
+            log('Token cannot be empty. Please try again.');
+          }
+        } else {
+          log('Invalid option. Please enter 1, 2, or 3.');
         }
-        default:
-          console.log('Invalid option. Exiting...');
-          process.exit(0);
       }
     } else {
-      const option = (await questionAsync('Menu:\n1. Logout\n2. Start Running Node\nChoose an option: ')).trim();
-      switch (option) {
-        case '1':
+      while (true) {
+        const option = (await questionAsync('Menu:\n1. Logout\n2. Start Running Node\nChoose an option: ')).trim();
+
+        if (option === '1') {
           try {
             fs.unlinkSync(LOCAL_FILE);
-            console.log('Logged out successfully.');
-            process.exit(0);
+            log('Logged out successfully.');
           } catch (err) {
-            console.error('Error deleting localStorage.json:', err.message);
-            process.exit(1);
+            log('Error deleting localStorage.json:', err.message || err);
           }
-          break;
-        case '2':
+          process.exit(0);
+        } else if (option === '2') {
           await startCountdownAndPoints();
           await connectWebSocket(state.accessToken, proxy);
           break;
-        default:
-          console.log('Invalid option. Exiting...');
-          process.exit(0);
+        } else {
+          log('Invalid option. Please enter 1 or 2.');
+        }
       }
     }
   } catch (err) {
-    console.error('Unexpected error in main:', err.message || err);
+    log('Unexpected error in main:', err.message || err);
   } finally {
-    // keep the CLI open for WS events; do not close rl here
+    // keep CLI open for WS events
   }
 }
 
@@ -413,7 +413,7 @@ async function main() {
    Graceful shutdown
    ------------------------- */
 process.on('SIGINT', () => {
-  console.log('Received SIGINT. Stopping pinging and disconnecting WebSocket...');
+  log('Received SIGINT. Stopping pinging and disconnecting WebSocket...');
   stopPinging();
   disconnectWebSocket();
   try { rl.close(); } catch (e) {}
@@ -421,4 +421,4 @@ process.on('SIGINT', () => {
 });
 
 // run
-main().catch(err => console.error('Startup error:', err));
+main().catch(err => log('Startup error:', err.message || err));
