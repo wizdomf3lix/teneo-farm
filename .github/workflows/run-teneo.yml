@@ -1,28 +1,39 @@
-name: Run Teneo Farm 24/7
+name: Run Teneo Node CLI (manual token)
 
 on:
-  workflow_dispatch:        # Manual trigger
-  
+  workflow_dispatch:
 
 jobs:
-  run-teneo:
+  run-node-cli:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: '18'
 
-      - name: Install dependencies
+      - name: Install dependencies if package.json exists
         run: |
-          npm install
+          if [ -f package.json ]; then
+            npm ci
+          else
+            echo "No package.json found, skipping npm install"
+          fi
 
-      - name: Run script with token
+      - name: Mask token in logs
+        run: |
+          echo "::add-mask::${{ secrets.ACCESS_TOKEN }}"
+
+      - name: Run main.js with automated stdin answers
         env:
-          TENEO_TOKEN: ${{ secrets.TENEO_TOKEN }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
         run: |
-          printf "n\n3\n$TENEO_TOKEN\n" | node main.js
+          # Provide answers to the interactive prompts:
+          # 1) "Do you want to use a proxy? (y/n): " -> n
+          # 2) "User Token not found... Choose an option: " -> 3
+          # 3) "Please enter your access token: " -> $ACCESS_TOKEN
+          printf "n\n3\n%s\n" "$ACCESS_TOKEN" | node main.js
