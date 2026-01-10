@@ -1,7 +1,10 @@
 name: Run Teneo Farm 24/7
 
 on:
-  workflow_dispatch:
+ schedule:
+    # This runs every 6 hours (at minute 0 of the hour)
+    - cron: '0 */6 * * *'
+ workflow_dispatch:
 
 jobs:
   run-teneo:
